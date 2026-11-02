@@ -66,20 +66,28 @@ jobs:
           STRICT: ${{ inputs.strict }}
         run: |
           set +e
-          pnpm dlx knip@${{ inputs.knip-version }} --no-progress > "$RUNNER_TEMP/knip.log" 2>&1
+          pnpm dlx knip@${{ inputs.knip-version }} --no-progress --reporter json > "$RUNNER_TEMP/knip.json" 2> "$RUNNER_TEMP/knip.err"
           code=$?
           set -e
-          cat "$RUNNER_TEMP/knip.log"
+          cat "$RUNNER_TEMP/knip.err"
+
+          if [ ! -s "$RUNNER_TEMP/knip.json" ] || ! jq empty "$RUNNER_TEMP/knip.json" 2>/dev/null; then
+            echo "::error::knip failed to run (exit $code). It produced no valid report, so this is a config or parsing error, not a finding."
+            exit 1
+          fi
+
+          SUMMARY=$(jq -r 'def total($k): ([.issues[] | .[$k] // [] | length] | add // 0); "Unused files: \(total("files"))\nUnused exports: \(total("exports"))\nUnused exported types: \(total("types"))\nUnused dependencies: \(total("dependencies"))\nUnused devDependencies: \(total("devDependencies"))\nUnlisted dependencies: \(total("unlisted"))\nDuplicate exports: \(total("duplicates"))\nUnresolved imports: \(total("unresolved"))"' "$RUNNER_TEMP/knip.json")
+          printf '%s\n' "$SUMMARY"
           {
             echo "### Knip"
             echo ""
             echo '```'
-            cat "$RUNNER_TEMP/knip.log"
+            echo "$SUMMARY"
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
           if [ "$code" -ge 2 ]; then
-            echo "::error::knip failed to run (exit $code). This is a config or parsing error, not a finding."
+            echo "::error::knip exited $code. Treating it as a tool error, not a finding."
             exit "$code"
           fi
 
@@ -92,5 +100,7 @@ jobs:
         if: always()
         with:
           name: knip
-          path: ${{ runner.temp }}/knip.log
+          path: |
+            ${{ runner.temp }}/knip.json
+            ${{ runner.temp }}/knip.err
           if-no-files-found: warn
