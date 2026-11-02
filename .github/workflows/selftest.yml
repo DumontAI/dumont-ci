@@ -23,3 +23,4 @@ jobs:
     with:
       path: fixture
       install-command: none
+      pnpm-version: 10

@@ -23,6 +23,10 @@ on:
         description: Pinned knip version.
         type: string
         default: 6.44.1
+      pnpm-version:
+        description: 'pnpm version. "packageManager" reads it from package.json; pass an explicit version when the repo uses bun or has no packageManager field.'
+        type: string
+        default: packageManager
 
 permissions:
   contents: read
@@ -40,8 +44,12 @@ jobs:
           node-version: 22
 
       - uses: pnpm/action-setup@v4
+        if: ${{ inputs.pnpm-version == 'packageManager' }}
+
+      - uses: pnpm/action-setup@v4
+        if: ${{ inputs.pnpm-version != 'packageManager' }}
         with:
-          version: 10
+          version: ${{ inputs.pnpm-version }}
 
       - name: Set up Bun
         if: ${{ startsWith(inputs.install-command, 'bun ') }}
