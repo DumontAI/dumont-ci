@@ -43,14 +43,19 @@ jobs:
           FAIL_ON: ${{ inputs.fail-on }}
         run: |
           set +e
-          osv-scanner scan source -r . \
-            --x-exclude 'g:**/node_modules' \
-            --x-exclude 'g:**/.git' \
-            --x-exclude 'g:**/dist' \
-            --x-exclude 'g:**/build' \
-            --x-exclude 'g:**/.next' \
-            --x-exclude 'g:**/coverage' \
-            --x-exclude 'g:**/vendor' \
+          ARGS=()
+          for f in pnpm-lock.yaml bun.lock package-lock.json yarn.lock requirements.txt; do
+            [ -f "$f" ] && ARGS+=(--lockfile "$f")
+          done
+          # Fallback only: no root lockfile, so walk the tree. Excludes keep the
+          # walk away from the directories that made it slow on large forks.
+          if [ ${#ARGS[@]} -eq 0 ]; then
+            ARGS=(-r .)
+            for d in node_modules .git dist build .next coverage vendor; do
+              ARGS+=(--x-exclude "g:**/$d")
+            done
+          fi
+          osv-scanner scan source "${ARGS[@]}" \
             --format json --output-file "$RUNNER_TEMP/osv.json" > "$RUNNER_TEMP/osv.log" 2>&1
           code=$?
           set -e
