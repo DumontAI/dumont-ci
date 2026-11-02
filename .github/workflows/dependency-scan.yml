@@ -43,7 +43,15 @@ jobs:
           FAIL_ON: ${{ inputs.fail-on }}
         run: |
           set +e
-          osv-scanner scan source -r . --format json --output-file "$RUNNER_TEMP/osv.json" > "$RUNNER_TEMP/osv.log" 2>&1
+          osv-scanner scan source -r . \
+            --x-exclude 'g:**/node_modules' \
+            --x-exclude 'g:**/.git' \
+            --x-exclude 'g:**/dist' \
+            --x-exclude 'g:**/build' \
+            --x-exclude 'g:**/.next' \
+            --x-exclude 'g:**/coverage' \
+            --x-exclude 'g:**/vendor' \
+            --format json --output-file "$RUNNER_TEMP/osv.json" > "$RUNNER_TEMP/osv.log" 2>&1
           code=$?
           set -e
           cat "$RUNNER_TEMP/osv.log"
