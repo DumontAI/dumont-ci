@@ -1,0 +1,103 @@
+name: Dependency Scan
+
+on:
+  workflow_call:
+    inputs:
+      runs-on:
+        description: Single runner label. Use ubuntu-latest unless the repo needs a specific pool.
+        type: string
+        default: ubuntu-latest
+      fail-on:
+        description: "none, any, moderate, high, or critical. Default is report only."
+        type: string
+        default: none
+      osv-version:
+        description: Pinned osv-scanner release tag.
+        type: string
+        default: v2.7.0
+
+permissions:
+  contents: read
+
+jobs:
+  dependency-scan:
+    name: Dependency scan
+    runs-on: ${{ inputs.runs-on }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Install osv-scanner
+        run: |
+          curl -sSfL -o "$RUNNER_TEMP/osv-scanner" \
+            "https://github.com/google/osv-scanner/releases/download/${{ inputs.osv-version }}/osv-scanner_linux_amd64"
+          chmod +x "$RUNNER_TEMP/osv-scanner"
+          echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
+
+      - name: Scan lockfiles
+        id: scan
+        shell: bash
+        env:
+          FAIL_ON: ${{ inputs.fail-on }}
+        run: |
+          set +e
+          osv-scanner scan source -r . --format json --output-file "$RUNNER_TEMP/osv.json" > "$RUNNER_TEMP/osv.log" 2>&1
+          code=$?
+          set -e
+          cat "$RUNNER_TEMP/osv.log"
+
+          if [ "$code" -gt 1 ]; then
+            echo "::error::osv-scanner failed with exit $code"
+            exit "$code"
+          fi
+
+          if [ ! -s "$RUNNER_TEMP/osv.json" ]; then
+            echo "::error::osv-scanner produced no JSON output"
+            exit 1
+          fi
+
+          count() {
+            jq -r --arg s "$1" '[.results[]?.packages[]?.vulnerabilities[]? | select((.database_specific.severity // "") == $s)] | length' "$RUNNER_TEMP/osv.json"
+          }
+          total=$(jq -r '[.results[]?.packages[]?.vulnerabilities[]?] | length' "$RUNNER_TEMP/osv.json")
+          low=$(count LOW)
+          moderate=$(count MODERATE)
+          high=$(count HIGH)
+          critical=$(count CRITICAL)
+
+          fail=0
+          case "$FAIL_ON" in
+            none) ;;
+            any) [ "$total" -gt 0 ] && fail=1 ;;
+            moderate) [ "$((moderate + high + critical))" -gt 0 ] && fail=1 ;;
+            high) [ "$((high + critical))" -gt 0 ] && fail=1 ;;
+            critical) [ "$critical" -gt 0 ] && fail=1 ;;
+            *) echo "::error::unknown fail-on value: $FAIL_ON"; exit 2 ;;
+          esac
+
+          {
+            echo "### Dependency scan"
+            echo ""
+            echo "| severity | count |"
+            echo "|---|---|"
+            echo "| critical | $critical |"
+            echo "| high | $high |"
+            echo "| moderate | $moderate |"
+            echo "| low | $low |"
+            echo ""
+            echo "Total: $total. Gate: $FAIL_ON."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if [ "$fail" -eq 1 ]; then
+            echo "::error::Dependency scan found vulnerabilities at or above '$FAIL_ON'."
+            exit 1
+          fi
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: osv-scanner
+          path: ${{ runner.temp }}/osv.json
+          if-no-files-found: warn

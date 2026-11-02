@@ -1,0 +1,77 @@
+name: Knip
+
+on:
+  workflow_call:
+    inputs:
+      runs-on:
+        description: Single runner label. Use ubuntu-latest unless the repo needs a specific pool.
+        type: string
+        default: ubuntu-latest
+      path:
+        description: Directory holding the package.json or workspace root.
+        type: string
+        default: .
+      strict:
+        description: Fail on knip findings. Default is report only.
+        type: boolean
+        default: false
+      install-command:
+        description: Dependency install command. Use "none" to skip install.
+        type: string
+        default: pnpm install --frozen-lockfile
+      knip-version:
+        description: Pinned knip version.
+        type: string
+        default: 6.44.1
+
+permissions:
+  contents: read
+
+jobs:
+  knip:
+    name: Knip
+    runs-on: ${{ inputs.runs-on }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - uses: pnpm/action-setup@v4
+
+      - name: Install dependencies
+        if: ${{ inputs.install-command != 'none' }}
+        working-directory: ${{ inputs.path }}
+        run: ${{ inputs.install-command }}
+
+      - name: Run knip
+        shell: bash
+        env:
+          STRICT: ${{ inputs.strict }}
+        run: |
+          set +e
+          pnpm dlx knip@${{ inputs.knip-version }} --no-progress > "$RUNNER_TEMP/knip.log" 2>&1
+          code=$?
+          set -e
+          cat "$RUNNER_TEMP/knip.log"
+          {
+            echo "### Knip"
+            echo ""
+            echo '```'
+            cat "$RUNNER_TEMP/knip.log"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if [ "$STRICT" = "true" ] && [ "$code" -ne 0 ]; then
+            echo "::error::knip found unused files, exports, or dependencies."
+            exit "$code"
+          fi
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: knip
+          path: ${{ runner.temp }}/knip.log
+          if-no-files-found: warn

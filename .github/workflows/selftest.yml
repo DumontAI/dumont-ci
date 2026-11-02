@@ -1,0 +1,24 @@
+name: Selftest
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  dependency-scan:
+    uses: ./.github/workflows/dependency-scan.yml
+    with:
+      fail-on: none
+
+  secret-scan:
+    uses: ./.github/workflows/secret-scan.yml
+
+  knip:
+    uses: ./.github/workflows/knip.yml
+    with:
+      path: fixture
+      install-command: none
