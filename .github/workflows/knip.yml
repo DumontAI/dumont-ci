@@ -78,6 +78,11 @@ jobs:
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
+          if [ "$code" -ge 2 ]; then
+            echo "::error::knip failed to run (exit $code). This is a config or parsing error, not a finding."
+            exit "$code"
+          fi
+
           if [ "$STRICT" = "true" ] && [ "$code" -ne 0 ]; then
             echo "::error::knip found unused files, exports, or dependencies."
             exit "$code"
