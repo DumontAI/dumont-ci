@@ -43,6 +43,10 @@ jobs:
         with:
           version: 10
 
+      - name: Set up Bun
+        if: ${{ startsWith(inputs.install-command, 'bun ') }}
+        uses: oven-sh/setup-bun@v2
+
       - name: Install dependencies
         if: ${{ inputs.install-command != 'none' }}
         working-directory: ${{ inputs.path }}
