@@ -61,9 +61,9 @@ jobs:
 Bun repo: pass `install-command: bun install --frozen-lockfile`. To skip install, pass `install-command: none`.
 Self-hosted runner: pass `runs-on: <single label>`.
 
-## Required org setting
+## Access
 
-The calling repo must be allowed to use workflows from this repo: Settings > Actions > General > Access, or the org-level equivalent, set to "repositories in the organization".
+This repo is public because dumont-hangar and dumont-bugs are public forks, and GitHub blocks public repositories from calling reusable workflows in a private repository. No org access setting is needed. Nothing here is secret: scanner YAML and a fixture only.
 
 ## Rolling out a gate
 
