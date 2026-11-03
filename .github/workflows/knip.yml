@@ -66,10 +66,12 @@ jobs:
           STRICT: ${{ inputs.strict }}
         run: |
           set +e
-          pnpm dlx knip@${{ inputs.knip-version }} --no-progress --reporter json > "$RUNNER_TEMP/knip.json" 2> "$RUNNER_TEMP/knip.err"
+          pnpm --silent dlx knip@${{ inputs.knip-version }} --no-progress --reporter json > "$RUNNER_TEMP/knip.raw" 2> "$RUNNER_TEMP/knip.err"
           code=$?
           set -e
           cat "$RUNNER_TEMP/knip.err"
+          # pnpm and dependency logs can write to stdout before the JSON; keep the JSON line.
+          grep '^{' "$RUNNER_TEMP/knip.raw" | tail -1 > "$RUNNER_TEMP/knip.json" || true
 
           if [ ! -s "$RUNNER_TEMP/knip.json" ] || ! jq empty "$RUNNER_TEMP/knip.json" 2>/dev/null; then
             echo "::error::knip failed to run (exit $code). It produced no valid report, so this is a config or parsing error, not a finding."
